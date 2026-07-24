@@ -14,7 +14,6 @@ import {
   ArrowLeft,
   ChevronRight,
   Download,
-  ExternalLink,
   Eye,
   EyeOff,
   File,
@@ -22,7 +21,6 @@ import {
   FilePlus,
   Folder,
   Loader2,
-  MessageSquare,
   Pencil,
   Plus,
   RotateCcw,
@@ -432,6 +430,8 @@ export interface DeploymentTaskUpdate {
   id: string;
   runtimeName: string;
   runtimeId?: string;
+  endpoint?: string;
+  consoleUrl?: string;
   region: string;
   startedAt: number;
   status: "running" | "success" | "error" | "cancelled";
@@ -580,7 +580,6 @@ export function ProjectPreview({
   agentCount,
   onChange,
   onDeploy,
-  onAgentAdded,
   onDeploymentTaskChange,
   feishuEnabled = false,
   onFeishuEnabledChange,
@@ -612,7 +611,6 @@ export function ProjectPreview({
   // driving the build/deploy/publish stepper.
   const [stageMap, setStageMap] = useState<Record<string, DeployStage>>({});
   const [activePhase, setActivePhase] = useState<string | null>(null);
-  const [addingAgent, setAddingAgent] = useState(false);
   const [envRows, setEnvRows] = useState<EnvRow[]>([]);
   const [showEnvValues, setShowEnvValues] = useState(false);
   const [hoveredAgentId, setHoveredAgentId] = useState<string | null>(null);
@@ -880,10 +878,13 @@ export function ProjectPreview({
         id: taskId,
         runtimeName: result.agentName || taskRuntimeName,
         runtimeId: result.runtimeId,
+        endpoint: result.url,
+        consoleUrl: result.consoleUrl,
         region: result.region || deployRegion,
         startedAt: taskStartedAt,
         status: "success",
         label: "部署完成",
+        message: undefined,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -921,82 +922,6 @@ export function ProjectPreview({
 
   function cancelDeploymentConfirmation() {
     setDeployConfirmOpen(false);
-  }
-
-  async function handleAddAgent() {
-    if (!deployResult || addingAgent) return;
-    setAddingAgent(true);
-    setDeployError(null);
-    try {
-      const {
-        addConnection,
-        addRuntimeConnection,
-        remoteAppId,
-        loadConnections,
-      } = await import("../adk/connections");
-      const { probeRuntimeApps } = await import("../adk/client");
-
-      let conn;
-      if (deployResult.runtimeId) {
-        // Preferred: server-side proxy — data-plane apikey never reaches
-        // the browser; /web/runtime-proxy injects it.
-        const region = deployResult.region ?? "cn-beijing";
-        const apps =
-          (await probeRuntimeApps(deployResult.runtimeId, region)) ?? [];
-        conn = addRuntimeConnection(
-          deployResult.runtimeId,
-          deployResult.agentName,
-          region,
-          apps,
-          apps.length > 0
-            ? { [apps[0]]: deployResult.agentName }
-            : undefined,
-        );
-      } else {
-        // Legacy: direct URL + apikey (older backends / manual deploys).
-        conn = await addConnection(
-          deployResult.agentName,
-          deployResult.url,
-          deployResult.apikey,
-          "",
-        );
-      }
-
-      if (conn.apps.length === 0) {
-        setDeployError("连接成功，但该地址未发现任何 Agent（/list-apps 为空）。");
-      } else {
-        const label = { [conn.apps[0]]: deployResult.agentName };
-        const updatedConn = {
-          ...conn,
-          appLabels: { ...(conn.appLabels ?? {}), ...label },
-        };
-
-        const allConns = loadConnections();
-        const updatedList = allConns.map((c) =>
-          c.id === conn.id ? updatedConn : c,
-        );
-        localStorage.setItem(
-          "veadk_agentkit_connections",
-          JSON.stringify(updatedList),
-        );
-
-        const { registerConnections } = await import("../adk/connections");
-        registerConnections(updatedList);
-
-        if (onAgentAdded) {
-          const agentId = remoteAppId(conn.id, conn.apps[0]);
-          onAgentAdded(agentId, deployResult.agentName);
-        } else {
-          alert(`🎉 Agent "${deployResult.agentName}" 已添加到左上角下拉列表！`);
-        }
-      }
-    } catch (err) {
-      setDeployError(
-        `添加 Agent 失败：${err instanceof Error ? err.message : String(err)}`,
-      );
-    } finally {
-      setAddingAgent(false);
-    }
   }
 
   function handleDownloadZip() {
@@ -1477,53 +1402,99 @@ export function ProjectPreview({
                 )}
               </section>
 
-              {(deploying || deployResult || Object.keys(stageMap).length > 0) && (
-                <section className="pp-config-section pp-progress-section">
-                  <div className="pp-config-label">部署进度</div>
-                  <ol className="pp-steps">
-                    {DEPLOY_STEPS.map((step, index) => {
-                      const activeIndex = activePhase
-                        ? DEPLOY_STEPS.findIndex((item) => item.phase === activePhase)
-                        : -1;
-                      const failed =
-                        !!deployError &&
-                        (activeIndex === -1 ? index === 0 : index === activeIndex);
-                      let status: "pending" | "active" | "done" | "failed";
-                      if (deployResult) status = "done";
-                      else if (failed) status = "failed";
-                      else if (activeIndex === -1) status = deploying ? "active" : "pending";
-                      else if (index < activeIndex) status = "done";
-                      else if (index === activeIndex) status = deployError ? "failed" : "active";
-                      else status = "pending";
-                      const frame = stageMap[step.phase];
-                      return (
-                        <li key={step.phase} className={`pp-step is-${status}`}>
-                          <span className="pp-step-dot">
-                            {status === "active" ? (
-                              <Loader2 className="pp-ic spin" />
-                            ) : status === "done" ? (
-                              "✓"
-                            ) : status === "failed" ? (
-                              "✕"
-                            ) : (
-                              index + 1
-                            )}
-                          </span>
-                          <span className="pp-step-body">
-                            <span className="pp-step-label">{step.label}</span>
-                            {status === "active" && frame?.message && (
-                              <span className="pp-step-msg">
-                                {frame.message}
-                                {typeof frame.pct === "number" ? ` (${frame.pct}%)` : ""}
-                              </span>
-                            )}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                </section>
-              )}
+              {(deploying || deployResult || Object.keys(stageMap).length > 0) &&
+                (() => {
+                  const activeIndex = activePhase
+                    ? DEPLOY_STEPS.findIndex((item) => item.phase === activePhase)
+                    : -1;
+                  const visibleActiveIndex =
+                    activeIndex === -1 ? (deploying || deployError ? 0 : -1) : activeIndex;
+                  const activeStep = visibleActiveIndex >= 0
+                    ? DEPLOY_STEPS[visibleActiveIndex]
+                    : undefined;
+                  const activeFrame = activeStep ? stageMap[activeStep.phase] : undefined;
+                  const progressPercent = deployResult
+                    ? 100
+                    : deployError
+                      ? Math.max(
+                          0,
+                          (visibleActiveIndex / Math.max(1, DEPLOY_STEPS.length - 1)) * 100,
+                        )
+                      : visibleActiveIndex >= 0
+                        ? Math.max(
+                            0,
+                            ((visibleActiveIndex + (activeFrame?.pct ?? 35) / 100) /
+                              Math.max(1, DEPLOY_STEPS.length - 1)) *
+                              100,
+                          )
+                        : 0;
+                  return (
+                    <section className="pp-config-section pp-progress-section">
+                      <div className="pp-config-label">部署进度</div>
+                      <div className="pp-progress-track">
+                        <div
+                          className={`pp-progress-line${deployError ? " is-failed" : ""}`}
+                          aria-hidden="true"
+                        >
+                          <span style={{ width: `${Math.min(100, progressPercent)}%` }} />
+                        </div>
+                        <ol className="pp-steps">
+                          {DEPLOY_STEPS.map((step, index) => {
+                            const failed =
+                              !!deployError &&
+                              (visibleActiveIndex === -1 ? index === 0 : index === visibleActiveIndex);
+                            let status: "pending" | "active" | "done" | "failed";
+                            if (deployResult) status = "done";
+                            else if (failed) status = "failed";
+                            else if (visibleActiveIndex === -1) status = "pending";
+                            else if (index < visibleActiveIndex) status = "done";
+                            else if (index === visibleActiveIndex) status = "active";
+                            else status = "pending";
+                            const statusLabel =
+                              status === "done"
+                                ? "已完成"
+                                : status === "active"
+                                  ? "进行中"
+                                  : status === "failed"
+                                    ? "失败"
+                                    : "等待中";
+                            return (
+                              <li
+                                key={step.phase}
+                                className={`pp-step is-${status}`}
+                                aria-label={`${step.label}：${statusLabel}`}
+                              >
+                                <span className="pp-step-dot" aria-hidden="true">
+                                  {status === "active" ? (
+                                    <span className="pp-step-spinner" />
+                                  ) : status === "done" ? (
+                                    <span className="pp-step-check" />
+                                  ) : (
+                                    index + 1
+                                  )}
+                                </span>
+                                <span className="pp-step-body">
+                                  <span className="pp-step-label">{step.label}</span>
+                                  <span className="pp-step-state">{statusLabel}</span>
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </div>
+                      {(activeFrame?.message || deployResult) && (
+                        <p className="pp-step-msg" aria-live="polite">
+                          {deployResult
+                            ? "部署完成，下一步操作已保存到右上角部署任务。"
+                            : activeFrame?.message}
+                          {!deployResult && typeof activeFrame?.pct === "number"
+                            ? ` (${activeFrame.pct}%)`
+                            : ""}
+                        </p>
+                      )}
+                    </section>
+                  );
+                })()}
 
               {deployError && (
                 <DeploymentErrorMessage
@@ -1537,58 +1508,6 @@ export function ProjectPreview({
                   onRetry={requestDeploymentConfirmation}
                 />
               )}
-
-              {deployResult && (
-                <section className="pp-deploy-result">
-                  <div className="pp-deploy-result-header">部署成功</div>
-                  <div className="pp-deploy-result-body">
-                    {deployResult.region && (
-                      <div className="pp-deploy-result-field">
-                        <label>区域</label>
-                        <code>
-                          {deployResult.region === "cn-shanghai"
-                            ? "上海 (cn-shanghai)"
-                            : "北京 (cn-beijing)"}
-                        </code>
-                      </div>
-                    )}
-                    <div className="pp-deploy-result-field">
-                      <label>Agent 名称</label>
-                      <code>{deployResult.agentName}</code>
-                    </div>
-                    <div className="pp-deploy-result-field">
-                      <label>API 端点</label>
-                      <code className="pp-deploy-result-url">{deployResult.url}</code>
-                    </div>
-                  </div>
-                  <div className="pp-deploy-result-actions">
-                    <button
-                      type="button"
-                      className="pp-deploy-result-btn"
-                      onClick={handleAddAgent}
-                      disabled={addingAgent}
-                    >
-                      {addingAgent ? (
-                        <Loader2 className="pp-ic spin" />
-                      ) : (
-                        <MessageSquare className="pp-ic" />
-                      )}
-                      {addingAgent ? "连接中…" : "立即对话"}
-                    </button>
-                    {deployResult.consoleUrl && (
-                      <a
-                        href={deployResult.consoleUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="pp-console-link pp-console-link-btn"
-                      >
-                        <ExternalLink className="pp-ic" />
-                        控制台
-                      </a>
-                    )}
-                  </div>
-                </section>
-              )}
             </div>
             <div className="pp-config-actions">
               <button
@@ -1601,10 +1520,18 @@ export function ProjectPreview({
                   <Loader2 className="pp-ic spin" />
                 ) : deployError ? (
                   <RotateCcw className="pp-ic" />
+                ) : deployResult ? (
+                  <RotateCcw className="pp-ic" />
                 ) : (
                   <DeployIcon className="pp-ic" />
                 )}
-                {deploying ? "部署中…" : deployError ? "重试部署" : "部署"}
+                {deploying
+                  ? "部署中…"
+                  : deployError
+                    ? "重试部署"
+                    : deployResult
+                      ? "重新部署"
+                      : "部署"}
               </button>
             </div>
           </aside>

@@ -66,8 +66,11 @@ server that `veadk frontend` launches — no separate backend.
   forwards its Volcengine credentials to debug runs and deployed runtimes. A
   global task list keeps Runtime, region, and progress
   visible across page switches, follows the actual generated Runtime name, and
-  supports cancellation or retry. Remote topology and trace requests use the selected
-  Runtime endpoint. The Remote Agent type is available only for child Agents;
+  supports cancellation or retry. Completed deployment tasks keep the endpoint,
+  console link, and Runtime-backed chat action in that global task card, while
+  the deployment page keeps only progress and redeploy controls. Remote topology
+  and trace requests use the selected Runtime endpoint. The Remote Agent type is
+  available only for child Agents;
   its generated internal proxy mounts AgentKit A2A center agents dynamically
   from the center ID, recall count, region, and OpenAPI endpoint. Remote names,
   descriptions, and capabilities come from the returned Agent Cards.

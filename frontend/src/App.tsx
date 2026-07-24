@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
-  ChevronDown,
-  CircleAlert,
-  CircleCheck,
-  CircleX,
   Copy,
-  ListTodo,
   Loader2,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -95,6 +90,18 @@ import {
   SandboxSessionWarning,
 } from "./ui/SandboxSession";
 import defaultSiteLogo from "./assets/volcengine.svg";
+import {
+  DeployTaskCancelledIcon,
+  DeployTaskChatIcon,
+  DeployTaskChevronIcon,
+  DeployTaskConsoleIcon,
+  DeployTaskCopiedIcon,
+  DeployTaskCopyIcon,
+  DeployTaskErrorIcon,
+  DeployTaskListIcon,
+  DeployTaskRunningIcon,
+  DeployTaskSuccessIcon,
+} from "./ui/icons/DeploymentTaskIcons";
 
 // Breadcrumb root label for the create flow and the per-mode leaf labels.
 const CREATE_ROOT = "创建 Agent";
@@ -356,6 +363,44 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function CopyTextButton({ text, label = "复制" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState("");
+  return (
+    <>
+      <button
+        type="button"
+        className="global-deploy-copy"
+        disabled={!text}
+        onClick={async () => {
+          if (!text) return;
+          try {
+            await navigator.clipboard.writeText(text);
+            setCopyError("");
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch {
+            setCopied(false);
+            setCopyError("复制失败，请手动选择 API 端点复制。");
+          }
+        }}
+      >
+        {copied ? (
+          <DeployTaskCopiedIcon className="global-deploy-action-icon" />
+        ) : (
+          <DeployTaskCopyIcon className="global-deploy-action-icon" />
+        )}
+        {copied ? "已复制" : label}
+      </button>
+      {copyError && (
+        <span className="global-deploy-action-error" role="alert">
+          {copyError}
+        </span>
+      )}
+    </>
+  );
+}
+
 function deployRegionLabel(region: string): string {
   if (region === "cn-beijing") return "华北 2（北京）";
   if (region === "cn-shanghai") return "华东 2（上海）";
@@ -365,12 +410,21 @@ function deployRegionLabel(region: string): string {
 function DeploymentTaskStatus({
   tasks,
   onCancel,
+  onOpenChat,
 }: {
   tasks: DeploymentTaskUpdate[];
   onCancel: (task: DeploymentTaskUpdate) => Promise<void>;
+  onOpenChat: (task: DeploymentTaskUpdate) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [chattingId, setChattingId] = useState<string | null>(null);
+  const [chatErrorById, setChatErrorById] = useState<Record<string, string>>({});
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLElement | null>(null);
+  const autoOpenedSuccessIdRef = useRef<string | null>(null);
+  const popoverFocusableSelector =
+    'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
   const runningCount = tasks.filter((task) => task.status === "running").length;
   const latest = tasks[0];
   const summaryStatus = runningCount > 0 ? "running" : latest?.status ?? "idle";
@@ -389,10 +443,49 @@ function DeploymentTaskStatus({
     setCancellingId(task.id);
     void onCancel(task).finally(() => setCancellingId(null));
   };
+  const closePopover = () => {
+    setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+  const openChat = (task: DeploymentTaskUpdate) => {
+    setChattingId(task.id);
+    setChatErrorById((current) => {
+      const { [task.id]: _drop, ...rest } = current;
+      return rest;
+    });
+    void onOpenChat(task)
+      .then(() => setOpen(false))
+      .catch((error) => {
+        setChatErrorById((current) => ({
+          ...current,
+          [task.id]: error instanceof Error ? error.message : String(error),
+        }));
+      })
+      .finally(() => setChattingId(null));
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(() => {
+      const firstAction = popoverRef.current?.querySelector<HTMLElement>(
+        popoverFocusableSelector,
+      );
+      (firstAction ?? popoverRef.current)?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
+    if (latest?.status !== "success") return;
+    if (autoOpenedSuccessIdRef.current === latest.id) return;
+    autoOpenedSuccessIdRef.current = latest.id;
+    setOpen(true);
+  }, [latest?.id, latest?.status]);
 
   return (
     <div className="global-deploy-center">
       <button
+        ref={triggerRef}
         type="button"
         className={`global-deploy-task is-${summaryStatus}`}
         aria-expanded={open}
@@ -400,18 +493,18 @@ function DeploymentTaskStatus({
         onClick={() => setOpen((current) => !current)}
       >
         {summaryStatus === "running" ? (
-          <Loader2 className="global-deploy-task-icon spin" />
+          <DeployTaskRunningIcon className="global-deploy-task-icon" />
         ) : summaryStatus === "success" ? (
-          <CircleCheck className="global-deploy-task-icon" />
+          <DeployTaskSuccessIcon className="global-deploy-task-icon" />
         ) : summaryStatus === "error" ? (
-          <CircleAlert className="global-deploy-task-icon" />
+          <DeployTaskErrorIcon className="global-deploy-task-icon" />
         ) : summaryStatus === "cancelled" ? (
-          <CircleX className="global-deploy-task-icon" />
+          <DeployTaskCancelledIcon className="global-deploy-task-icon" />
         ) : (
-          <ListTodo className="global-deploy-task-icon" />
+          <DeployTaskListIcon className="global-deploy-task-icon" />
         )}
         <span className="global-deploy-task-detail">{summary}</span>
-        <ChevronDown
+        <DeployTaskChevronIcon
           className={`global-deploy-task-chevron${open ? " is-open" : ""}`}
         />
       </button>
@@ -422,12 +515,43 @@ function DeploymentTaskStatus({
             type="button"
             className="global-deploy-task-scrim"
             aria-label="关闭部署任务"
-            onClick={() => setOpen(false)}
+            onClick={closePopover}
           />
           <section
+            ref={popoverRef}
             className="global-deploy-popover"
             role="dialog"
+            aria-modal="true"
             aria-label="部署任务"
+            tabIndex={-1}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                closePopover();
+                return;
+              }
+              if (event.key === "Tab") {
+                const focusable = Array.from(
+                  popoverRef.current?.querySelectorAll<HTMLElement>(
+                    popoverFocusableSelector,
+                  ) ?? [],
+                );
+                if (focusable.length === 0) {
+                  event.preventDefault();
+                  popoverRef.current?.focus();
+                  return;
+                }
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first.focus();
+                }
+              }
+            }}
           >
             <header className="global-deploy-popover-head">
               <span>部署任务</span>
@@ -442,6 +566,7 @@ function DeploymentTaskStatus({
                     ? ` ${Math.round(task.pct)}%`
                     : ""
                 }`;
+                const canOpenChat = task.status === "success" && !!task.runtimeId;
                 return (
                   <article
                     key={task.id}
@@ -468,6 +593,12 @@ function DeploymentTaskStatus({
                           <dd>{task.runtimeId}</dd>
                         </div>
                       )}
+                      {task.endpoint && (
+                        <div className="global-deploy-meta-wide">
+                          <dt>API 端点</dt>
+                          <dd title={task.endpoint}>{task.endpoint}</dd>
+                        </div>
+                      )}
                     </dl>
                     {task.message && task.status === "error" ? (
                       <DeploymentErrorMessage
@@ -478,6 +609,42 @@ function DeploymentTaskStatus({
                     ) : task.message ? (
                       <p className="global-deploy-message">{task.message}</p>
                     ) : null}
+                    {chatErrorById[task.id] && (
+                      <p className="global-deploy-message is-error" role="alert">
+                        {chatErrorById[task.id]}
+                      </p>
+                    )}
+                    {task.status === "success" && (
+                      <div className="global-deploy-item-actions">
+                        {canOpenChat && (
+                          <button
+                            type="button"
+                            className="global-deploy-chat"
+                            disabled={chattingId === task.id}
+                            onClick={() => openChat(task)}
+                          >
+                            {chattingId === task.id ? (
+                              <Loader2 className="global-deploy-action-icon spin" />
+                            ) : (
+                              <DeployTaskChatIcon className="global-deploy-action-icon" />
+                            )}
+                            {chattingId === task.id ? "连接中…" : "立即对话"}
+                          </button>
+                        )}
+                        {task.endpoint && <CopyTextButton text={task.endpoint} label="复制端点" />}
+                        {task.consoleUrl && (
+                          <a
+                            href={task.consoleUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="global-deploy-console"
+                          >
+                            <DeployTaskConsoleIcon className="global-deploy-action-icon" />
+                            控制台
+                          </a>
+                        )}
+                      </div>
+                    )}
                     {task.status === "running" && (
                       <>
                         <div className="global-deploy-progress" aria-hidden>
@@ -1726,6 +1893,23 @@ export default function App() {
     );
     selectAgent(agentId);
   };
+  const openDeploymentTaskChat = async (task: DeploymentTaskUpdate) => {
+    if (!task.runtimeId) {
+      throw new Error("该部署任务缺少 Runtime ID，无法直接连接。");
+    }
+    const agentId = await connectRuntime(
+      task.runtimeId,
+      task.runtimeName,
+      task.region,
+    );
+    selectAgent(agentId);
+    setCreateView(null);
+    setSkillCenter(false);
+    setAddAgent(false);
+    setAddMenu(false);
+    setSearchView(false);
+    setManageAgents(false);
+  };
 
   return (
     <div className="layout">
@@ -2034,6 +2218,7 @@ export default function App() {
                 <DeploymentTaskStatus
                   tasks={canCreateAgents ? deploymentTasks : []}
                   onCancel={cancelDeploymentTask}
+                  onOpenChat={openDeploymentTaskChat}
                 />
               }
             />

@@ -14,6 +14,18 @@ const customCreateSource = readFileSync(
   new URL("../src/create/CustomCreate.tsx", import.meta.url),
   "utf8",
 );
+const appSource = readFileSync(
+  new URL("../src/App.tsx", import.meta.url),
+  "utf8",
+);
+const appStyles = readFileSync(
+  new URL("../src/styles.css", import.meta.url),
+  "utf8",
+);
+const deploymentTaskIconsSource = readFileSync(
+  new URL("../src/ui/icons/DeploymentTaskIcons.tsx", import.meta.url),
+  "utf8",
+);
 const agentTypeMetaSource = readFileSync(
   new URL("../src/create/agentTypeMeta.tsx", import.meta.url),
   "utf8",
@@ -99,7 +111,7 @@ test("requires explicit confirmation before starting deployment", () => {
   );
   const performDeployment = projectPreviewSource.slice(
     projectPreviewSource.indexOf("async function performDeployment"),
-    projectPreviewSource.indexOf("async function handleAddAgent"),
+    projectPreviewSource.indexOf("function cancelDeploymentConfirmation"),
   );
 
   assert.match(requestConfirmation, /setDeployConfirmOpen\(true\)/);
@@ -111,4 +123,75 @@ test("requires explicit confirmation before starting deployment", () => {
   );
   assert.match(projectPreviewSource, />\s*取消\s*</);
   assert.match(projectPreviewSource, />\s*确定部署\s*</);
+});
+
+test("moves completed deployment results into the global task card", () => {
+  assert.match(projectPreviewSource, /endpoint: result\.url/);
+  assert.match(projectPreviewSource, /consoleUrl: result\.consoleUrl/);
+  assert.match(projectPreviewSource, /部署完成，下一步操作已保存到右上角部署任务/);
+  assert.doesNotMatch(projectPreviewSource, /async function handleAddAgent/);
+  assert.doesNotMatch(projectPreviewSource, /className="pp-deploy-result"/);
+  assert.doesNotMatch(projectPreviewSource, /className="pp-deploy-complete"/);
+
+  assert.match(appSource, /<dt>API 端点<\/dt>/);
+  assert.match(appSource, /className="global-deploy-chat"/);
+  assert.match(appSource, /className="global-deploy-console"/);
+  assert.match(appSource, /label="复制端点"/);
+  assert.match(appSource, /const openDeploymentTaskChat = async \(task: DeploymentTaskUpdate\)/);
+  assert.match(appSource, /from "\.\/ui\/icons\/DeploymentTaskIcons"/);
+  assert.doesNotMatch(appSource, /ExternalLink|MessageSquare/);
+  assert.doesNotMatch(projectPreviewSource, /apiKey\?: string|apiKey: result\.apikey/);
+  assert.match(appStyles, /\.global-deploy-meta-wide\s*\{/);
+  assert.match(appStyles, /\.global-deploy-item-actions \.global-deploy-chat\s*\{/);
+  assert.match(appStyles, /\.global-deploy-item-actions button:focus-visible/);
+  assert.match(appStyles, /min-height:\s*28px/);
+  assert.match(appSource, /ref=\{triggerRef\}/);
+  assert.match(appSource, /autoOpenedSuccessIdRef/);
+  assert.match(appSource, /latest\?\.status !== "success"/);
+  assert.match(appSource, /setOpen\(true\)/);
+  assert.match(appSource, /aria-modal="true"/);
+  assert.match(appSource, /event\.key === "Escape"/);
+  assert.match(appSource, /event\.key === "Tab"/);
+  assert.match(appSource, /role="alert"/);
+  assert.match(appSource, /复制失败，请手动选择 API 端点复制/);
+  assert.match(deploymentTaskIconsSource, /export function DeployTaskChatIcon/);
+  assert.match(deploymentTaskIconsSource, /stroke="currentColor"/);
+});
+
+test("renders deployment progress as a compact progress bar", () => {
+  assert.match(projectPreviewSource, /className="pp-progress-track"/);
+  assert.match(projectPreviewSource, /className=\{`pp-progress-line/);
+  assert.match(projectPreviewSource, /className="pp-step-spinner"/);
+  assert.match(projectPreviewSource, /className="pp-step-check"/);
+  assert.match(projectPreviewSource, /className="pp-step-state"/);
+  assert.match(
+    projectPreviewStyles,
+    /\.pp-progress-track\s*\{[\s\S]*?position:\s*relative;/,
+  );
+  assert.match(
+    projectPreviewStyles,
+    /\.pp-progress-line\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?height:\s*4px;/,
+  );
+  assert.match(
+    projectPreviewStyles,
+    /\.pp-steps\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/,
+  );
+  assert.match(
+    projectPreviewStyles,
+    /\.pp-step-dot\s*\{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;/,
+  );
+  assert.match(
+    projectPreviewStyles,
+    /\.pp-step-spinner\s*\{[\s\S]*?width:\s*10px;[\s\S]*?height:\s*10px;/,
+  );
+  assert.match(
+    projectPreviewStyles,
+    /\.pp-step-check\s*\{[\s\S]*?border-left:\s*2px solid currentColor;/,
+  );
+  assert.match(
+    projectPreviewStyles,
+    /\.pp-step\.is-done \.pp-step-dot\s*\{[\s\S]*?background:\s*hsl\(142 45% 36%\);/,
+  );
+  assert.match(projectPreviewStyles, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.doesNotMatch(projectPreviewStyles, /\.pp-deploy-complete/);
 });
