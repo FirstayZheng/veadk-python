@@ -73,6 +73,7 @@ import {
   AgentWorkspace,
   type WorkspaceAgentDraft,
 } from "./ui/AgentWorkspace";
+import { MyAgents, type MyAgentCardData } from "./ui/MyAgents";
 import { SearchView } from "./ui/Search";
 import {
   buildAgentEntries,
@@ -944,6 +945,7 @@ export default function App() {
   const [searchView, setSearchView] = useState(false);
   // The #748 Agent workspace: library, evaluation groups, and draft management.
   const [manageAgents, setManageAgents] = useState(false);
+  const [myAgents, setMyAgents] = useState(false);
   // A search result may belong to a different agent; remember it so the
   // agent-switch effect opens it instead of resetting to a fresh chat.
   const pendingOpenRef = useRef<{ app: string; sid: string } | null>(null);
@@ -970,6 +972,8 @@ export default function App() {
   } | null>(null);
   const [focusedDeploymentTaskId, setFocusedDeploymentTaskId] = useState("");
   const [focusedWorkspaceAgentId, setFocusedWorkspaceAgentId] = useState("");
+  const [agentDetailTarget, setAgentDetailTarget] =
+    useState<MyAgentCardData | null>(null);
   // Shown when the user clicks the breadcrumb root to leave a create mode;
   // warns that the in-progress draft will be discarded.
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -1342,6 +1346,15 @@ export default function App() {
         setUserInfo(id.info);
         setLocalMode(!!id.local);
         setAuthStatus(id.status);
+        if (id.status === "authenticated") {
+          setCreateView(null);
+          setSkillCenter(false);
+          setAddAgent(false);
+          setAddMenu(false);
+          setSearchView(false);
+          setManageAgents(false);
+          setMyAgents(true);
+        }
       })
       .catch((error) => {
         setAuthError(error instanceof Error ? error.message : String(error));
@@ -1466,7 +1479,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!access || !uiConfigLoaded || defaultViewAppliedRef.current) return;
+    if (!access || !uiConfigLoaded || defaultViewAppliedRef.current || myAgents) return;
     defaultViewAppliedRef.current = true;
     if (defaultView === "addAgent" && access.capabilities.createAgents) {
       setCreateView(null);
@@ -1476,7 +1489,7 @@ export default function App() {
       setAddAgent(false);
       setAddMenu(true);
     }
-  }, [access, defaultView, uiConfigLoaded]);
+  }, [access, defaultView, myAgents, uiConfigLoaded]);
 
   useEffect(() => {
     if (!access) return;
@@ -1529,6 +1542,7 @@ export default function App() {
     setSearchView(false);
     setManageAgents(false);
     startNewChat();
+    setMyAgents(true);
     setUserId(name);
     setUserInfo({ name });
     setLocalMode(true);
@@ -2489,8 +2503,78 @@ export default function App() {
     setConnections(loadConnections());
     viewSidRef.current = "";
     setSessionId("");
+    setMyAgents(false);
     setAppName(id);
   };
+
+  const openAgentCreateFromMyAgents = () => {
+    if (!canCreateAgents) {
+      setError("当前账号没有添加 Agent 的权限。");
+      return;
+    }
+    setMyAgents(false);
+    setManageAgents(false);
+    setImportedDraft(null);
+    setCreateView(null);
+    setAddMenu(true);
+    setError("");
+  };
+
+  const connectMyAgent = async (agent: MyAgentCardData) => {
+    if (!agent.runtime) return;
+    try {
+      const agentId = await connectRuntime(
+        agent.runtime.runtimeId,
+        agent.name,
+        agent.runtime.region,
+        agent.runtime.currentVersion,
+      );
+      setConnections(loadConnections());
+      setAgentDetailTarget(null);
+      setMyAgents(false);
+      setManageAgents(false);
+      startNewChat();
+      setAppName(agentId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  const openMyAgentDetails = (agent: MyAgentCardData) => {
+    if (!agent.runtime) return;
+    setAgentDetailTarget(agent);
+    setFocusedWorkspaceAgentId("");
+    setMyAgents(false);
+    setManageAgents(true);
+    setError("");
+  };
+
+  const openMyAgentsPage = () => {
+    if (sandboxSession) exitSandboxSession();
+    viewSidRef.current = "";
+    setSessionId("");
+    setCreateView(null);
+    setSkillCenter(false);
+    setAddAgent(false);
+    setAddMenu(false);
+    setSearchView(false);
+    setManageAgents(false);
+    setAgentDetailTarget(null);
+    setMyAgents(true);
+    setError("");
+  };
+
+  const detailAgentEntry: AgentEntry | null = agentDetailTarget?.runtime
+    ? {
+        id: `detail:${agentDetailTarget.runtime.runtimeId}`,
+        label: agentDetailTarget.name,
+        app: agentDetailTarget.name,
+        remote: true,
+        runtimeId: agentDetailTarget.runtime.runtimeId,
+        region: agentDetailTarget.runtime.region,
+        currentVersion: agentDetailTarget.runtime.currentVersion,
+      }
+    : null;
 
   return (
     <div className="layout">
@@ -2508,6 +2592,8 @@ export default function App() {
           setAddMenu(false);
           setSearchView(false);
           setManageAgents(false);
+          setAgentDetailTarget(null);
+          setMyAgents(false);
           startNewChat();
         }}
         onSearch={() => {
@@ -2517,6 +2603,8 @@ export default function App() {
           setAddAgent(false);
           setAddMenu(false);
           setManageAgents(false);
+          setAgentDetailTarget(null);
+          setMyAgents(false);
           setSearchView(true);
           setError("");
         }}
@@ -2533,6 +2621,8 @@ export default function App() {
           setAddAgent(false);
           setSearchView(false);
           setManageAgents(false);
+          setAgentDetailTarget(null);
+          setMyAgents(false);
           setCreateView(null);
           setImportedDraft(null);
           setAddMenu(true);
@@ -2545,6 +2635,8 @@ export default function App() {
           setAddMenu(false);
           setSearchView(false);
           setManageAgents(false);
+          setAgentDetailTarget(null);
+          setMyAgents(false);
           setSkillCenter(true);
           setError("");
         }}
@@ -2559,24 +2651,14 @@ export default function App() {
           setSkillCenter(false);
           setSearchView(false);
           setManageAgents(false);
+          setAgentDetailTarget(null);
+          setMyAgents(false);
           setSessionId("");
           setAddMenu(false);
           setAddAgent(true);
           setError("");
         }}
-        onManageAgents={() => {
-          if (sandboxSession) exitSandboxSession();
-          viewSidRef.current = "";
-          setSessionId("");
-          setCreateView(null);
-          setSkillCenter(false);
-          setAddAgent(false);
-          setAddMenu(false);
-          setSearchView(false);
-          setManageAgents(true);
-          setError("");
-          void refreshAgentLibrary();
-        }}
+        onMyAgents={openMyAgentsPage}
         onPickSession={(id) => {
           setCreateView(null);
           setSkillCenter(false);
@@ -2584,6 +2666,8 @@ export default function App() {
           setAddMenu(false);
           setSearchView(false);
           setManageAgents(false);
+          setAgentDetailTarget(null);
+          setMyAgents(false);
           setError("");
           pickSession(id);
         }}
@@ -2705,11 +2789,7 @@ export default function App() {
               onRemoveAttachment={removeDraftAttachment}
               newChatMode={sandboxSession ? "agent" : newChatMode}
               newChatLayout={!sandboxSession && turns.length === 0 && skillJob === null}
-              showModeSelector={
-                !sandboxSession &&
-                turns.length === 0 &&
-                skillJob === null
-              }
+              showModeSelector={false}
               temporaryEnabled={newChatCapabilities.temporaryEnabled}
               skillCreateEnabled={newChatCapabilities.skillCreateEnabled}
               onModeChange={(mode) => {
@@ -2752,13 +2832,20 @@ export default function App() {
               localApps={apps}
               currentRuntime={currentRuntime}
               runtimeScope={access.capabilities.runtimeScope}
+              onBrowseAgents={openMyAgentsPage}
               title={
-                showAddMenu
+                myAgents
+                  ? "智能体"
+                  : showAddMenu
                   ? "添加 Agent"
                   : showAddAgent
                     ? "添加 AgentKit 智能体"
                     : showManageAgents
-                      ? "智能体"
+                      ? agentDetailTarget
+                        ? agentDetailTarget.name
+                        : focusedWorkspaceAgentId
+                        ? labelOf(focusedWorkspaceAgentId)
+                        : "智能体详情"
                       : undefined
               }
               titleLeading={
@@ -2770,6 +2857,7 @@ export default function App() {
                 !skillCenter &&
                 !searchView &&
                 !showManageAgents &&
+                !myAgents &&
                 visibleCreateView === null &&
                 appName ? (
                   <button
@@ -2825,9 +2913,16 @@ export default function App() {
               </div>
             )}
 
-            {showManageAgents ? (
+            {myAgents ? (
+              <MyAgents
+                onCreateAgent={openAgentCreateFromMyAgents}
+                onUseAgent={(agent) => void connectMyAgent(agent)}
+                onViewAgentDetails={openMyAgentDetails}
+              />
+            ) : showManageAgents ? (
               <AgentWorkspace
-                agents={orderedWorkspaceAgentEntries}
+                key={detailAgentEntry?.id ?? "workspace"}
+                agents={detailAgentEntry ? [detailAgentEntry] : orderedWorkspaceAgentEntries}
                 drafts={savedAgentDrafts}
                 agentOrder={workspaceAgentOrder}
                 selectedAgentId={appName}
@@ -2840,7 +2935,8 @@ export default function App() {
                 agentsError={agentLibraryError}
                 deploymentTasks={deploymentTasks}
                 focusedDeploymentTaskId={focusedDeploymentTaskId}
-                focusedAgentId={focusedWorkspaceAgentId}
+                focusedAgentId={detailAgentEntry?.id ?? focusedWorkspaceAgentId}
+                detailOnly={!!detailAgentEntry}
                 onRetryAgents={() => void refreshAgentLibrary()}
                 onAgentOrderChange={saveWorkspaceAgentOrder}
                 onDeleteAgents={deleteWorkspaceAgents}

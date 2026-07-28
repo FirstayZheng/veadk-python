@@ -19,10 +19,17 @@ const projectPreviewSource = readFileSync(
   new URL("../src/ui/ProjectPreview.tsx", import.meta.url),
   "utf8",
 );
+const connectionsSource = readFileSync(
+  new URL("../src/adk/connections.ts", import.meta.url),
+  "utf8",
+);
 
 test("Agent navigation opens the PR 748 workspace with creation and evaluation", () => {
   assert.match(appSource, /import \{[\s\S]*?AgentWorkspace[\s\S]*?\} from "\.\/ui\/AgentWorkspace"/);
-  assert.match(appSource, /<AgentWorkspace[\s\S]*?agents=\{orderedWorkspaceAgentEntries\}/);
+  assert.match(
+    appSource,
+    /<AgentWorkspace[\s\S]*?agents=\{detailAgentEntry \? \[detailAgentEntry\] : orderedWorkspaceAgentEntries\}/,
+  );
   assert.match(workspaceSource, /智能体库/);
   assert.match(workspaceSource, /评测/);
   assert.match(workspaceSource, /view === "library" \? "新建 Agent" : "新建评测组"/);
@@ -53,6 +60,17 @@ test("workspace layout keeps the library and evaluation panes available", () => 
   assert.doesNotMatch(workspaceSource, /只读预览，可拖动与缩放/);
   assert.match(workspaceStyles, /\.aw-canvas\s*\{[\s\S]*?height:\s*220px;/);
   assert.doesNotMatch(workspaceStyles, /\.aw-canvas-card\s*\{[^}]*min-height:\s*330px/);
+});
+
+test("focused agent details can render without the workspace tabs or list sidebar", () => {
+  assert.match(workspaceSource, /detailOnly\?: boolean/);
+  assert.match(workspaceSource, /aw-root\$\{detailOnly \? " is-detail-only" : ""\}/);
+  assert.match(workspaceStyles, /\.aw-root\.is-detail-only \.aw-view-tabs,[\s\S]*?\.aw-root\.is-detail-only \.aw-sidebar[\s\S]*?display: none/);
+  assert.match(workspaceStyles, /\.aw-root\.is-detail-only \.aw-workspace\s*\{[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(
+    appSource,
+    /focusedAgentId=\{detailAgentEntry\?\.id \?\? focusedWorkspaceAgentId\}[\s\S]*?detailOnly=\{!!detailAgentEntry\}/,
+  );
 });
 
 test("workspace publish flow restores PR 748 deployment lifecycle hooks", () => {
@@ -107,7 +125,10 @@ test("workspace agents can be reordered by drag or keyboard", () => {
   assert.match(appSource, /function workspaceAgentOrderKey\(userId: string\)/);
   assert.match(appSource, /const \[workspaceAgentOrder, setWorkspaceAgentOrder\] = useState<string\[\]>\(\[\]\)/);
   assert.match(appSource, /const saveWorkspaceAgentOrder = useCallback/);
-  assert.match(appSource, /agents=\{orderedWorkspaceAgentEntries\}/);
+  assert.match(
+    appSource,
+    /agents=\{detailAgentEntry \? \[detailAgentEntry\] : orderedWorkspaceAgentEntries\}/,
+  );
   assert.match(appSource, /agentOrder=\{workspaceAgentOrder\}/);
   assert.match(appSource, /onAgentOrderChange=\{saveWorkspaceAgentOrder\}/);
 
@@ -123,6 +144,33 @@ test("workspace agents can be reordered by drag or keyboard", () => {
   assert.match(workspaceStyles, /\.aw-agent-item\[draggable="true"\]/);
   assert.match(workspaceStyles, /\.aw-agent-item\.is-drop-target/);
   assert.match(workspaceStyles, /\.aw-agent-item\.is-drop-after/);
+});
+
+test("runtime refresh preserves agent order and detail loading uses an overlay", () => {
+  assert.match(
+    connectionsSource,
+    /const existingIndex = list\.findIndex\(\(item\) => item\.runtimeId === runtimeId\)/,
+  );
+  assert.match(connectionsSource, /else list\[existingIndex\] = conn/);
+  assert.doesNotMatch(
+    connectionsSource,
+    /loadConnections\(\)\.filter\(\(c\) => c\.runtimeId !== runtimeId\), conn/,
+  );
+  assert.match(workspaceSource, /className="aw-detail-loading" role="status"/);
+  assert.match(
+    workspaceSource,
+    /className="aw-detail-loading"[\s\S]*?className="loading-gap-spinner"/,
+  );
+  assert.match(workspaceSource, /正在加载智能体/);
+  assert.match(
+    workspaceSource,
+    /!canUpdate \|\| \(!loadingAgentInfo && !selectedAgentInfo\)/,
+  );
+  assert.doesNotMatch(
+    workspaceSource,
+    /!canUpdate \|\| loadingAgentInfo \|\| !selectedAgentInfo/,
+  );
+  assert.match(workspaceStyles, /\.aw-detail-loading\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?inset:\s*0;/);
 });
 
 test("workspace supports deleting individual authorized agents", () => {
