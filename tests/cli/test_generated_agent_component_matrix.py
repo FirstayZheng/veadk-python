@@ -569,5 +569,9 @@ def test_deeply_nested_agent_types_generate_complete_component_project() -> None
     assert 'KnowledgeBase(backend="context_search"' in agent_py
     assert "OpentelemetryTracer()" in agent_py
     assert _env_keys(files[".env.example"]) == expected_env
-    assert "veadk-python[extensions]>=1.0.5" in files["requirements.txt"]
+    assert (
+        "veadk-python[extensions] @ "
+        "git+https://github.com/FirstayZheng/veadk-python.git"
+        "@fix/stabilize-deploy-runtime-update-flow" in files["requirements.txt"]
+    )
     _assert_python_files_compile(project)

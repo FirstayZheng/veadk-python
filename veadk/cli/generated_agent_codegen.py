@@ -631,7 +631,13 @@ def render_requirements(extras: set[str], include_feishu_channel: bool) -> str:
         all_extras.add("extensions")
     unique_extras = sorted(all_extras)
     extras_str = f"[{','.join(unique_extras)}]" if unique_extras else ""
-    pkg = f"veadk-python{extras_str}>=1.0.5"
+    # Temporary dogfood pin: deploy generated Runtime with the current fix branch
+    # until the TLS IAM credential fix is released to PyPI.
+    pkg = (
+        f"veadk-python{extras_str} @ "
+        "git+https://github.com/FirstayZheng/veadk-python.git"
+        "@fix/stabilize-deploy-runtime-update-flow"
+    )
     packages = [pkg, "agentkit-sdk-python", "google-adk", "starlette<1.0.0"]
     return "\n".join(packages) + "\n"
 
