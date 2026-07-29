@@ -102,7 +102,7 @@ class TLSConfig(BaseSettings):
     def otel_exporter_topic_id(self) -> str:
         _topic_id = (
             os.getenv("OBSERVABILITY_OPENTELEMETRY_TLS_SERVICE_NAME")
-            or VeTLS().get_trace_topic_id()
+            or VeTLS(region=self.otel_exporter_region).get_trace_topic_id()
         )
         return _topic_id
 
