@@ -12,12 +12,48 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import os
 
+from veadk.auth.veauth.utils import VeIAMCredential, get_credential_from_vefaas_iam
 from veadk.consts import DEFAULT_TLS_LOG_PROJECT_NAME, DEFAULT_TLS_TRACING_INSTANCE_NAME
 from veadk.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def resolve_volcengine_credentials(
+    access_key: str | None = None,
+    secret_key: str | None = None,
+    session_token: str | None = None,
+) -> VeIAMCredential:
+    """Resolve Volcengine credentials for TLS in local and VeFaaS runtimes."""
+    resolved_access_key = access_key or os.getenv("VOLCENGINE_ACCESS_KEY", "")
+    resolved_secret_key = secret_key or os.getenv("VOLCENGINE_SECRET_KEY", "")
+    resolved_session_token = (
+        session_token
+        or os.getenv("VOLCENGINE_SESSION_TOKEN")
+        or os.getenv("VOLC_SESSIONTOKEN", "")
+    )
+
+    provider = (os.getenv("CLOUD_PROVIDER") or "").lower()
+    if provider == "byteplus":
+        resolved_access_key = resolved_access_key or os.getenv(
+            "BYTEPLUS_ACCESS_KEY", ""
+        )
+        resolved_secret_key = resolved_secret_key or os.getenv(
+            "BYTEPLUS_SECRET_KEY", ""
+        )
+
+    if resolved_access_key and resolved_secret_key:
+        return VeIAMCredential(
+            access_key_id=resolved_access_key,
+            secret_access_key=resolved_secret_key,
+            session_token=resolved_session_token,
+        )
+
+    return get_credential_from_vefaas_iam()
 
 
 class VeTLS:
@@ -25,6 +61,7 @@ class VeTLS:
         self,
         access_key: str | None = None,
         secret_key: str | None = None,
+        session_token: str | None = None,
         region: str = "cn-beijing",
     ):
         try:
@@ -37,12 +74,14 @@ class VeTLS:
 
         self._ve_tls_request = ve_tls_request
 
-        self.access_key = (
-            access_key if access_key else os.getenv("VOLCENGINE_ACCESS_KEY", "")
+        credential = resolve_volcengine_credentials(
+            access_key=access_key,
+            secret_key=secret_key,
+            session_token=session_token,
         )
-        self.secret_key = (
-            secret_key if secret_key else os.getenv("VOLCENGINE_SECRET_KEY", "")
-        )
+        self.access_key = credential.access_key_id
+        self.secret_key = credential.secret_access_key
+        self.session_token = credential.session_token
         self.region = region
 
         self._client = TLSService(
@@ -50,7 +89,10 @@ class VeTLS:
             access_key_id=self.access_key,
             access_key_secret=self.secret_key,
             region=self.region,
+            security_token=self.session_token or None,
         )
+        if self.session_token:
+            self._client.service_info.credentials.set_session_token(self.session_token)
 
     def get_project_id_by_name(self, project_name: str) -> str:
         """Get the ID of a log project by its name.

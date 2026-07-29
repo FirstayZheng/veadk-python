@@ -19,7 +19,8 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from typing_extensions import override
 
-from veadk.config import getenv, settings
+from veadk.config import settings
+from veadk.integrations.ve_tls.ve_tls import resolve_volcengine_credentials
 from veadk.tracing.telemetry.exporters.base_exporter import BaseExporter
 from veadk.utils.logger import get_logger
 
@@ -49,8 +50,19 @@ class TLSExporterConfig(BaseModel):
     topic_id: str = Field(
         default_factory=lambda: settings.tls_config.otel_exporter_topic_id,
     )
-    access_key: str = Field(default_factory=lambda: getenv("VOLCENGINE_ACCESS_KEY"))
-    secret_key: str = Field(default_factory=lambda: getenv("VOLCENGINE_SECRET_KEY"))
+    access_key: str = ""
+    secret_key: str = ""
+    session_token: str = ""
+
+    def model_post_init(self, context: Any) -> None:
+        credential = resolve_volcengine_credentials(
+            access_key=self.access_key,
+            secret_key=self.secret_key,
+            session_token=self.session_token,
+        )
+        self.access_key = credential.access_key_id
+        self.secret_key = credential.secret_access_key
+        self.session_token = credential.session_token
 
 
 class TLSExporter(BaseExporter):
@@ -107,6 +119,8 @@ class TLSExporter(BaseExporter):
             "x-tls-otel-sk": self.config.secret_key,
             "x-tls-otel-region": self.config.region,
         }
+        if self.config.session_token:
+            headers["X-Security-Token"] = self.config.session_token
         self.headers |= headers
 
         self._exporter = OTLPSpanExporter(
