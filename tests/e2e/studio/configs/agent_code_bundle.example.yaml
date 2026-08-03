@@ -1,0 +1,26 @@
+# Copy to config.yaml and fill real values. Keep secrets local.
+
+studio:
+  base_url: "https://your-studio.example.com"
+  auth:
+    cookie: ""
+    bearer_token: ""
+  timeout_seconds: 1800
+
+download:
+  # browser | api | existing
+  mode: "browser"
+  # Use existing when the code bundle was already downloaded.
+  existing_path: ""
+  # Optional hints for locating the target in Studio.
+  agent_name: ""
+  runtime_id: ""
+  output_dir: "/private/tmp/veadk-studio-agent-code-smoke"
+
+code_test:
+  compile_python: true
+  run_pytest_if_present: false
+  import_modules: []
+  commands: []
+  # - [".venv/bin/python", "-m", "pytest", "-q"]
+  timeout_seconds: 300

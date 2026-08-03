@@ -1,0 +1,125 @@
+# Copy this file to config.yaml and fill in real values.
+# This folder is ignored by git in this repo, but still treat config.yaml as secret.
+
+studio:
+  # Public Studio URL. Fill this after deploy, or let studio.deploy set it for
+  # the current run when continue_after_deploy is used.
+  base_url: "https://your-studio.example.com"
+  timeout_seconds: 1800
+  deploy:
+    # Optional step 1 automation: run `veadk studio deploy` before the SQL smoke.
+    enabled: false
+    # Recommended for first-time setup. The script deploys Studio, prints the
+    # URL, then exits so you can attach the VeFaaS app to the DB VPC/subnet and
+    # log in/copy auth before running the SQL smoke.
+    stop_after_deploy: true
+    from_source: true
+    python: "/Users/bytedance/code/veadk-python/.venv/bin/python"
+    cwd: "/Users/bytedance/code/veadk-python"
+    timeout_seconds: 3600
+    user_pool_id: "your-veidentity-user-pool-id"
+    allowed_client_id: "your-veidentity-client-id"
+    client_secret: ""
+    vefaas_app_name: "veadk-studio-sql-smoke"
+    region: "cn-beijing"
+    project: "default"
+    iam_role: ""
+    gateway_name: ""
+    gateway_service_name: ""
+    gateway_upstream_name: ""
+    # Prefer env vars over literal keys when possible.
+    volcengine_access_key: ""
+    volcengine_secret_key: ""
+    veadk_version: ""
+    site_logo: ""
+    site_title: ""
+    admin: ""
+    developer: ""
+    extra_args: []
+    env: {}
+    # env:
+    #   VOLCENGINE_ACCESS_KEY: ""
+    #   VOLCENGINE_SECRET_KEY: ""
+  auth:
+    # Use one of these auth methods, depending on how Studio is deployed.
+    # For SSO browser sessions, paste the Cookie request header value.
+    cookie: ""
+    # Or paste a bearer token without or with the "Bearer " prefix.
+    bearer_token: ""
+    # Local no-SSO development only.
+    local_user: ""
+    # Extra headers are merged into every request.
+    headers: {}
+
+deployment:
+  region: "cn-beijing"
+  project_name: "default"
+  network:
+    # public | private | both. For your private-only smoke, use private.
+    mode: "private"
+    vpc_id: "vpc-xxxxxxxx"
+    # String or YAML list are both accepted.
+    subnet_ids: "subnet-xxxxxxxx"
+    enable_shared_internet_access: false
+  # Extra Runtime envs shared by all cases. Put MODEL_AGENT_API_KEY here only if
+  # Studio cannot resolve/inject it automatically.
+  extra_env:
+    # MODEL_AGENT_API_KEY: ""
+    # MODEL_AGENT_PROVIDER: "openai"
+    # MODEL_AGENT_API_BASE: "https://ark.cn-beijing.volces.com/api/v3/"
+
+agent:
+  name_prefix: "studio-sql-smoke"
+  model_name: "doubao-seed-2-1-pro-260628"
+  model_provider: ""
+  model_api_base: ""
+  builtin_tools: []
+  description: "SQL short-term memory smoke test agent."
+  instruction: "You are a concise smoke-test assistant. Reply briefly and clearly."
+
+smoke:
+  user_id: "studio_sql_smoke_user"
+  session_id_prefix: "studio-sql-smoke"
+  require_response: true
+  invoke_timeout_seconds: 900
+  messages:
+    - "This is turn one. Reply with OK and remember the word basalt."
+    - "This is turn two. What word did I ask you to remember?"
+
+cleanup:
+  delete_runtime_on_success: false
+  delete_runtime_on_failure: false
+
+cases:
+  postgresql:
+    enabled: true
+    backend: "postgresql"
+    env:
+      DATABASE_POSTGRESQL_HOST: "postgres-private.rds.example"
+      DATABASE_POSTGRESQL_PORT: "5432"
+      DATABASE_POSTGRESQL_USER: "your_user"
+      DATABASE_POSTGRESQL_PASSWORD: "your_password"
+      DATABASE_POSTGRESQL_DATABASE: "your_database"
+      # Optional, supported by VeADK PostgreSqlConfig.
+      # DATABASE_POSTGRESQL_SCHEMA: "studio_smoke"
+    db_verify:
+      # Optional direct DB verification from the machine running this script.
+      # Leave false if only Studio/Runtime can reach the database private address.
+      enabled: false
+      schema: "public"
+      driver: "postgresql+psycopg2"
+
+  mysql:
+    enabled: false
+    backend: "mysql"
+    env:
+      DATABASE_MYSQL_HOST: "mysql-private.rds.example"
+      DATABASE_MYSQL_USER: "your_user"
+      DATABASE_MYSQL_PASSWORD: "your_password"
+      DATABASE_MYSQL_DATABASE: "your_database"
+      # VeADK MysqlConfig currently defaults charset=utf8 and does not expose port
+      # in the generated Studio form. If a custom port is required, prefer db_url
+      # support or extend VeADK config first.
+    db_verify:
+      enabled: false
+      driver: "mysql+pymysql"

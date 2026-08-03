@@ -1,0 +1,59 @@
+# Copy to config.yaml and fill real values. Keep secrets local.
+
+studio:
+  base_url: "https://your-studio.example.com"
+  timeout_seconds: 1800
+  auth:
+    cookie: ""
+    bearer_token: ""
+    local_user: ""
+    headers: {}
+
+deployment:
+  region: "cn-beijing"
+  project_name: "default"
+  network:
+    mode: "private"
+    vpc_id: ""
+    subnet_ids: ""
+    enable_shared_internet_access: true
+  extra_env: {}
+
+agent:
+  name_prefix: "ltmos"
+  agent_name: ""
+  model_name: "doubao-seed-2-1-pro-260628"
+  model_provider: ""
+  model_api_base: ""
+  auto_save_session: true
+  short_term_memory: false
+  short_term_backend: "local"
+  description: "OpenSearch long-term memory smoke test agent."
+  instruction: "You are a concise memory smoke-test assistant. Use long-term memory when asked about remembered facts."
+
+long_term_memory:
+  backend: "opensearch"
+  env:
+    DATABASE_OPENSEARCH_HOST: ""
+    DATABASE_OPENSEARCH_PORT: "9200"
+    DATABASE_OPENSEARCH_USERNAME: ""
+    DATABASE_OPENSEARCH_PASSWORD: ""
+    # DATABASE_OPENSEARCH_USE_SSL: "true"
+    # DATABASE_OPENSEARCH_CERT_PATH: ""
+    # Required by OpenSearch vector backends:
+    MODEL_EMBEDDING_NAME: ""
+    MODEL_EMBEDDING_DIM: ""
+    MODEL_EMBEDDING_API_BASE: "https://ark.cn-beijing.volces.com/api/v3/"
+    MODEL_EMBEDDING_API_KEY: ""
+
+verification:
+  user_id: "studio_ltm_opensearch_user"
+  expected_contains: "LTM_OPENSEARCH_SENTINEL_YYYYMMDD"
+  query: "OpenSearch long-term memory sentinel"
+  memory_messages:
+    - "请记住这条长期记忆测试信息：OpenSearch 长期记忆暗号是 LTM_OPENSEARCH_SENTINEL_YYYYMMDD。"
+  memory_search_attempts: 12
+  memory_search_interval_seconds: 10
+  invoke_timeout_seconds: 900
+  chat_messages:
+    - "请调用长期记忆，回答 OpenSearch 长期记忆暗号是什么？只输出暗号原文。"

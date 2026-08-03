@@ -1,0 +1,66 @@
+# Copy to a local config file and fill real values. Keep secrets local.
+
+studio:
+  base_url: "https://your-studio.example.com"
+  timeout_seconds: 1800
+  auth:
+    cookie: ""
+    bearer_token: ""
+    local_user: ""
+    headers: {}
+
+deployment:
+  region: "cn-beijing"
+  project_name: "default"
+  network:
+    # For private-only OpenSearch, this should usually be private or both.
+    mode: "private"
+    vpc_id: ""
+    subnet_ids: ""
+    # Enable this if the Runtime also needs public egress for model/embedding APIs.
+    enable_shared_internet_access: true
+  extra_env: {}
+
+agent:
+  name_prefix: "studio-kb-opensearch"
+  # Recommended for preloaded indexes; must normalize to a valid lowercase
+  # OpenSearch index as <agent_name>_kb.
+  agent_name: ""
+  model_name: "doubao-seed-2-1-pro-260628"
+  model_provider: ""
+  model_api_base: ""
+  description: "OpenSearch knowledge base smoke test agent."
+  instruction: "Use the mounted OpenSearch knowledge base when useful. Be concise."
+
+knowledgebase:
+  backend: "opensearch"
+  env:
+    DATABASE_OPENSEARCH_HOST: ""
+    DATABASE_OPENSEARCH_PORT: "9200"
+    DATABASE_OPENSEARCH_USERNAME: ""
+    DATABASE_OPENSEARCH_PASSWORD: ""
+    # Optional implementation env not currently exposed by Studio's generated form.
+    DATABASE_OPENSEARCH_USE_SSL: "true"
+    DATABASE_OPENSEARCH_CERT_PATH: ""
+    DATABASE_OPENSEARCH_SECRET_TOKEN: ""
+
+    MODEL_EMBEDDING_NAME: "doubao-embedding-vision-250615"
+    MODEL_EMBEDDING_DIM: "2048"
+    MODEL_EMBEDDING_API_BASE: "https://ark.cn-beijing.volces.com/api/v3/"
+    MODEL_EMBEDDING_API_KEY: ""
+
+verification:
+  user_id: "studio_kb_opensearch_user"
+  query: ""
+  expected_contains: ""
+  require_search_result: false
+  # For private-only OpenSearch content tests, these files are packaged into the
+  # generated Agent, then Runtime startup writes them to OpenSearch from the VPC.
+  ingest_files: []
+  local_packaged_text_max_chars: 120000
+  verify_local_backend_search: false
+  chat_messages: []
+
+cleanup:
+  delete_runtime_on_success: false
+  delete_runtime_on_failure: false

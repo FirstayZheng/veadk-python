@@ -1,0 +1,90 @@
+# Copy to config.yaml and fill real values. Keep secrets local.
+
+studio:
+  base_url: "https://your-studio.example.com"
+  timeout_seconds: 1800
+  auth:
+    cookie: ""
+    bearer_token: ""
+    local_user: ""
+    headers: {}
+
+deployment:
+  region: "cn-beijing"
+  project_name: "default"
+  network:
+    # public | private | both
+    mode: "private"
+    vpc_id: ""
+    subnet_ids: ""
+    enable_shared_internet_access: true
+  extra_env: {}
+
+agent:
+  name_prefix: "studio-kb-smoke"
+  # Optional stable name. Use this when pre-populating an index like <agent_name>_kb.
+  agent_name: ""
+  model_name: "doubao-seed-2-1-pro-260628"
+  model_provider: ""
+  model_api_base: ""
+  description: "Knowledge base mount smoke test agent."
+  instruction: "Use the mounted knowledge base when a question requires private test facts. Be concise."
+
+knowledgebase:
+  # local | opensearch | viking | context_search
+  backend: "context_search"
+  env:
+    # local/opensearch embedding env:
+    # MODEL_EMBEDDING_NAME: "doubao-embedding-vision-250615"
+    # MODEL_EMBEDDING_DIM: "2048"
+    # MODEL_EMBEDDING_API_BASE: "https://ark.cn-beijing.volces.com/api/v3/"
+    # MODEL_EMBEDDING_API_KEY: ""
+
+    # opensearch:
+    # DATABASE_OPENSEARCH_HOST: ""
+    # DATABASE_OPENSEARCH_PORT: "9200"
+    # DATABASE_OPENSEARCH_USERNAME: ""
+    # DATABASE_OPENSEARCH_PASSWORD: ""
+    # DATABASE_OPENSEARCH_USE_SSL: "true"
+    # DATABASE_OPENSEARCH_CERT_PATH: ""
+    # DATABASE_OPENSEARCH_SECRET_TOKEN: ""
+
+    # viking optional overrides:
+    # DATABASE_VIKING_PROJECT: "default"
+    # DATABASE_VIKING_REGION: "cn-beijing"
+    # DATABASE_VIKING_BASE_URL: ""
+    # DATABASE_TOS_BUCKET: ""
+    # DATABASE_TOS_ENDPOINT: "tos-cn-beijing.volces.com"
+    # DATABASE_TOS_REGION: "cn-beijing"
+
+    # context_search:
+    DATABASE_CONTEXT_SEARCH_ENGINE_ID: ""
+    DATABASE_CONTEXT_SEARCH_ENGINE_ENDPOINT: ""
+    DATABASE_CONTEXT_SEARCH_ENGINE_APIKEY: ""
+
+verification:
+  user_id: "studio_kb_smoke_user"
+  query: ""
+  # Compared after whitespace/control-character normalization so PDF text
+  # extraction artifacts do not cause false negatives.
+  expected_contains: ""
+  require_search_result: false
+  # Optional content-level verification: import local files into the generated KB,
+  # then verify both direct backend search and deployed Runtime search.
+  ingest_files: []
+  ingest_tos_bucket_name: ""
+  ingest_tos_bucket_path: "knowledgebase/studio-kb-smoke"
+  ingest_metadata: {}
+  ingest_poll_attempts: 12
+  ingest_poll_interval_seconds: 10
+  # For backend=local/opensearch, ingest_files are packaged into the generated
+  # project as UTF-8 text chunks and loaded at Runtime startup. For private-only
+  # OpenSearch, this lets the Runtime ingest from inside the VPC.
+  local_packaged_text_max_chars: 120000
+  verify_local_backend_search: false
+  chat_messages: []
+  # - "Use the knowledge base. What is the private sentinel phrase?"
+
+cleanup:
+  delete_runtime_on_success: false
+  delete_runtime_on_failure: false
